@@ -6,6 +6,7 @@ use std::thread;
 const PACKAGE_IDENTIFIER: usize = 32;
 const THREAD_MAX_NUM: usize = 8;
 const THREAD_IDENTIFIER_LENGTH: usize = 31;
+#[derive(Debug)]
 pub struct ExpressionPackage {
     identifier: [u8; PACKAGE_IDENTIFIER],
     expression: Arc<RwLock<structures::Expression>>,
@@ -20,6 +21,7 @@ impl ExpressionPackage {
         //First, find input variables
         let mut variable_hashmap = HashMap::new();
         for variable_name in &function.input {
+            println!("AAA{}", variable_name);
             variable_hashmap.insert(
                 variable_name.to_string(),
                 Arc::new(RwLock::new(input.remove(0))),
@@ -59,6 +61,30 @@ impl ExpressionPackage {
             expression,
             variable: Arc::new(RwLock::new(input_hashmap)),
         }
+    }
+    pub fn from_vec_expression(
+        expression_vec: Vec<std::sync::Arc<std::sync::RwLock<structures::Expression>>>,
+        input: HashMap<String, variables::Primitive>,
+    ) -> Vec<Self> {
+        let mut self_vector = Vec::new();
+        let mut rng = rand::thread_rng();
+        let mut input_hashmap = HashMap::new();
+        for (variable_name, variable_content) in input {
+            input_hashmap.insert(variable_name, Arc::new(RwLock::new(variable_content)));
+        }
+        let arc_variable_hashmap = Arc::new(RwLock::new(input_hashmap));
+        for expression in expression_vec {
+            let mut identifier = [0; PACKAGE_IDENTIFIER];
+            for identifier_byte in identifier.iter_mut() {
+                *identifier_byte = rng.gen();
+            }
+            self_vector.push(Self {
+                identifier,
+                expression,
+                variable: Arc::clone(&arc_variable_hashmap),
+            })
+        }
+        self_vector
     }
 }
 pub enum Message {
@@ -349,7 +375,9 @@ impl Kernel {
                                                                         variable_hmap.insert(variable_name.to_string(), variable_content.read().unwrap().clone());
                                                                     }
                                                                     variable_hmap.insert(String::from("this"), single_result);
-                                                                    blocks.push(ExpressionPackage::from_expression(Arc::clone(block), variable_hmap));
+                                                                    for pack in ExpressionPackage::from_vec_expression(block.to_vec(), variable_hmap) {
+                                                                        blocks.push(pack);
+                                                                    }
                                                                 },
                                                                 variables::Complex::Stack(stack_result) => {
                                                                     for single_result in stack_result {
@@ -358,7 +386,9 @@ impl Kernel {
                                                                             variable_hmap.insert(variable_name.to_string(), variable_content.read().unwrap().clone());
                                                                         }
                                                                         variable_hmap.insert(String::from("this"), single_result);
-                                                                        blocks.push(ExpressionPackage::from_expression(Arc::clone(block), variable_hmap));
+                                                                        for pack in ExpressionPackage::from_vec_expression(block.to_vec(), variable_hmap) {
+                                                                            blocks.push(pack);
+                                                                        }
                                                                     }
                                                                 },
                                                             }
