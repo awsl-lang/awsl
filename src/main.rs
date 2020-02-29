@@ -3,7 +3,9 @@ mod functions;
 mod kernel;
 mod structures;
 mod variables;
-fn main() {}
+fn main() {
+    println!("AAA");
+}
 #[cfg(test)]
 mod tests {
     use super::*;
