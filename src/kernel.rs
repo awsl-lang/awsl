@@ -21,7 +21,6 @@ impl ExpressionPackage {
         //First, find input variables
         let mut variable_hashmap = HashMap::new();
         for variable_name in &function.input {
-            println!("AAA{}", variable_name);
             variable_hashmap.insert(
                 variable_name.to_string(),
                 Arc::new(RwLock::new(input.remove(0))),
