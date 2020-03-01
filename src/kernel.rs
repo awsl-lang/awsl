@@ -110,7 +110,7 @@ pub enum Message {
     Exit,
     ExitGracefully,
 }
-enum QueryResult {
+pub enum QueryResult {
     Running,
     Completed,
 }
@@ -467,8 +467,8 @@ impl Kernel {
                             });
                         }
                     }
-                    let mut idle_thread_vec: Vec<&Thread> = Vec::new();
-                    for thread in &thread_vec {
+                    let mut idle_thread_vec: Vec<&mut Thread> = Vec::new();
+                    for thread in &mut thread_vec {
                         if let ThreadState::Idle = thread.state {
                             idle_thread_vec.push(thread);
                         }
@@ -482,6 +482,7 @@ impl Kernel {
                                 .sender
                                 .send(Message::Package(package))
                                 .unwrap();
+                            thread.state = ThreadState::Busy;
                         }
                     }
                     if now_stop {
