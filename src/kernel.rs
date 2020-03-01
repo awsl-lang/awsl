@@ -491,6 +491,9 @@ impl Kernel {
                                 can_stop = false;
                             }
                         }
+                        if (!assigned_job_identifier_hashmap.is_empty()) || (!assign_queue.is_empty()) {
+                            can_stop = false;
+                        }
                         if can_stop {
                             log::trace!("Kernel stopping gracefully...");
                             for thread in thread_vec {
