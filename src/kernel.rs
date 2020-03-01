@@ -514,10 +514,10 @@ impl Kernel {
         }
     }
     pub fn send_message(&self, msg: Message) {
-        self.sender.send(msg);
+        self.sender.send(msg).unwrap();
     }
     pub fn send_package(&self, package: ExpressionPackage) {
-        self.sender.send(Message::Package(package));
+        self.sender.send(Message::Package(package)).unwrap();
         let mut received = false;
         while !received {
             if let Message::PackageReceived = self.receiver.recv().unwrap() {
