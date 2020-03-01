@@ -3,9 +3,9 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
-const PACKAGE_IDENTIFIER: usize = 32;
+const PACKAGE_IDENTIFIER: usize = 8;
 const THREAD_MAX_NUM: usize = 8;
-const THREAD_IDENTIFIER_LENGTH: usize = 31;
+const THREAD_IDENTIFIER_LENGTH: usize = 7;
 impl std::fmt::Display for ExpressionPackage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // Write strictly the first element into the supplied output
