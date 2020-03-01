@@ -149,6 +149,7 @@ impl Kernel {
                             Message::Package(assign_package) => {
                                 log::info!("Kernel received a package.");
                                 assign_queue.push(assign_package);
+                                tx.send(Message::PackageReceived).unwrap();
                             }
                             Message::Exit => {
                                 log::info!("Kernel stopping...");
@@ -175,7 +176,11 @@ impl Kernel {
                                 Message::Complete => {
                                     thread.state = ThreadState::Idle;
                                     log::trace!("Pushing job identifier from thread identifier {:?}", thread.identifier);
-                                    completed_job_identifier_list.push(assigned_job_identifier_hashmap.remove(&thread.identifier).unwrap());
+                                    if assigned_job_identifier_hashmap.get(&thread.identifier).is_some() {
+                                        completed_job_identifier_list.push(assigned_job_identifier_hashmap.remove(&thread.identifier).unwrap());
+                                    } else {
+                                        log::warn!("Job identifier seems not inside job list");
+                                    }
                                 },
                                 Message::CompleteWithPackage(package_vector) => {
                                     for assign_package in package_vector {
@@ -185,10 +190,12 @@ impl Kernel {
                                     completed_job_identifier_list.push(assigned_job_identifier_hashmap.remove(&thread.identifier).unwrap());
                                 }
                                 Message::Package(package) => {
+                                    log::trace!("Received package {:?} from thread {:?}", package.identifier, thread.identifier);
                                     assign_queue.push(package);
                                     thread.sender.send(Message::PackageReceived).unwrap();
                                 }
                                 Message::Query(package_id) => {
+                                    log::trace!("Received query request from thread {:?}", thread.identifier);
                                     let mut is_completed = Message::QueryResult(QueryResult::Running);
                                     for i in &completed_job_identifier_list {
                                         if &package_id == i {
@@ -396,6 +403,7 @@ impl Kernel {
                                                         },
                                                         structures::ExpressionTo::Nil => {},
                                                     }
+                                                    log::trace!("Sented result.");
                                                     tx.send(thread_result).unwrap();
                                                 }
                                                 Message::Exit => {
@@ -460,6 +468,15 @@ impl Kernel {
     }
     pub fn send_message(&self, msg: Message) {
         self.sender.send(msg);
+    }
+    pub fn send_package(&self, package: ExpressionPackage) {
+        self.sender.send(Message::Package(package));
+        let mut received = false;
+        while !received {
+            if let Message::PackageReceived = self.receiver.recv().unwrap() {
+                received = true;
+            }
+        }
     }
     pub fn stop(self) {
         self.sender.send(Message::Exit);

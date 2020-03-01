@@ -28,9 +28,9 @@ mod tests {
         let threads = kernel::Kernel::new();
         let package = kernel::ExpressionPackage::from_function(&function, Vec::new());
         for i in package {
-            threads.send_message(kernel::Message::Package(i));
+            threads.send_package(i);
         }
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(5));
         threads.stop();
     }
     #[test]
@@ -38,15 +38,15 @@ mod tests {
         pretty_env_logger::init();
         let threads = kernel::Kernel::new();
         let script = structures::new_script(
-            "main<>(){print(\"abc\");print(\"cde\")=>{print(\"fgh\");};print(\"cda\");}",
+            "main<>(){print(\"abc\");stack123()=>{print(\"fgh\");};print(\"cda\");}",
         );
         let package =
             kernel::ExpressionPackage::from_function(script.get("main").unwrap(), Vec::new());
+        log::trace!("{:?}", package);
         for i in package {
-            thread::sleep(Duration::from_secs(1));
-            threads.send_message(kernel::Message::Package(i));
+            threads.send_package(i);
         }
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(5));
         threads.stop();
     }
 }
