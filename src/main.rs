@@ -4,6 +4,7 @@ mod kernel;
 mod structures;
 mod variables;
 fn main() {
+    pretty_env_logger::init();
     let cli_config = clap::App::new("awsl")
         .version("0.9 Alpha")
         .author("moelife-coder <61054382+moelife-coder@users.noreply.github.com>")
