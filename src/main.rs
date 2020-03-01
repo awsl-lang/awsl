@@ -30,8 +30,7 @@ mod tests {
         for i in package {
             threads.send_package(i);
         }
-        thread::sleep(Duration::from_secs(5));
-        threads.stop();
+        threads.grace_stop();
     }
     #[test]
     fn new_script() {
@@ -42,11 +41,9 @@ mod tests {
         );
         let package =
             kernel::ExpressionPackage::from_function(script.get("main").unwrap(), Vec::new());
-        log::trace!("{:?}", package);
         for i in package {
             threads.send_package(i);
         }
-        thread::sleep(Duration::from_secs(5));
-        threads.stop();
+        threads.grace_stop();
     }
 }

@@ -6,6 +6,19 @@ use std::thread;
 const PACKAGE_IDENTIFIER: usize = 32;
 const THREAD_MAX_NUM: usize = 8;
 const THREAD_IDENTIFIER_LENGTH: usize = 31;
+impl std::fmt::Display for ExpressionPackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(
+            f,
+            "{}",
+            base64::display::Base64Display::with_config(&self.identifier, base64::STANDARD_NO_PAD)
+        )
+    }
+}
 #[derive(Debug)]
 pub struct ExpressionPackage {
     identifier: [u8; PACKAGE_IDENTIFIER],
@@ -95,6 +108,7 @@ pub enum Message {
     CompleteWithPackage(Vec<ExpressionPackage>),
     PackageReceived,
     Exit,
+    ExitGracefully,
 }
 enum QueryResult {
     Running,
@@ -108,6 +122,19 @@ pub struct Kernel {
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     handle: thread::JoinHandle<()>,
+}
+impl std::fmt::Display for Thread {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(
+            f,
+            "{}",
+            base64::display::Base64Display::with_config(&self.identifier, base64::STANDARD_NO_PAD)
+        )
+    }
 }
 struct Thread {
     identifier: [u8; THREAD_IDENTIFIER_LENGTH],
@@ -125,6 +152,7 @@ impl Kernel {
             .name("Kernel".to_string())
             .spawn(move || {
                 //Reserved sender. currently there's no use for it.
+                let mut now_stop = false;
                 tx.send(Message::Complete).unwrap();
                 let script_hashmap = Arc::new(RwLock::new(HashMap::new()));
                 let mut thread_vec: Vec<Thread> = Vec::new();
@@ -142,24 +170,25 @@ impl Kernel {
                                     .insert(script_name, script)
                                     .is_some()
                                 {
-                                    log::warn!("Script name already registered. Rewritting...");
+                                    log::warn!("Script already registered. Rewritting...");
                                 };
                             }
                             Message::Package(assign_package) => {
-                                log::info!("Kernel received a package.");
+                                log::trace!("Kernel received package {}", assign_package);
                                 assign_queue.push(assign_package);
                                 tx.send(Message::PackageReceived).unwrap();
                             }
                             Message::Exit => {
-                                log::info!("Kernel stopping...");
+                                log::trace!("Kernel stopping...");
                                 for thread in thread_vec {
                                     thread.sender.send(Message::Exit).unwrap();
                                     thread.handle.join().unwrap();
                                 }
-                                log::warn!("Kernel stopped.");
+                                log::info!("Kernel stopped.");
                                 return;
                             }
-                            _ => log::warn!("Kernel received an unsupported message"),
+                            Message::ExitGracefully => now_stop = true,
+                            _ => log::error!("Kernel received an unsupported message"),
                         };
                     } else if let Err(std::sync::mpsc::TryRecvError::Disconnected) =
                         message_from_main_thread_warped
@@ -174,7 +203,7 @@ impl Kernel {
                             match message_from_thread {
                                 Message::Complete => {
                                     thread.state = ThreadState::Idle;
-                                    log::trace!("Pushing job identifier from thread identifier {:?}", thread.identifier);
+                                    log::trace!("Pushing job identifier from thread identifier {}", thread);
                                     if assigned_job_identifier_hashmap.get(&thread.identifier).is_some() {
                                         completed_job_identifier_list.push(assigned_job_identifier_hashmap.remove(&thread.identifier).unwrap());
                                     } else {
@@ -189,12 +218,12 @@ impl Kernel {
                                     completed_job_identifier_list.push(assigned_job_identifier_hashmap.remove(&thread.identifier).unwrap());
                                 }
                                 Message::Package(package) => {
-                                    log::trace!("Received package {:?} from thread {:?}", package.identifier, thread.identifier);
+                                    log::trace!("Received package {} from thread {}", package, thread);
                                     assign_queue.push(package);
                                     thread.sender.send(Message::PackageReceived).unwrap();
                                 }
                                 Message::Query(package_id) => {
-                                    log::trace!("Received query request from thread {:?}", thread.identifier);
+                                    log::trace!("Received query request from thread {}", thread);
                                     let mut is_completed = Message::QueryResult(QueryResult::Running);
                                     for i in &completed_job_identifier_list {
                                         if &package_id == i {
@@ -203,7 +232,7 @@ impl Kernel {
                                     }
                                     thread.sender.send(is_completed).unwrap();
                                 }
-                                _ => panic!("Kernel received an unsupported message"),
+                                _ => log::error!("Kernel received an unsupported message"),
                             }
                         }
                     }
@@ -217,11 +246,11 @@ impl Kernel {
                     let idle_thread_num = idle_thread_vec.len();
                     let mut create_thread_count = 0;
                     if idle_thread_num < assign_queue.len() {
-                        log::info!("Idle thread not enough.");
+                        log::trace!("Idle thread not enough.");
                         if THREAD_MAX_NUM
                             > thread_vec.len() - idle_thread_vec.len() + assign_queue.len()
                         {
-                            log::info!("Create thread will fix it.");
+                            log::trace!("Create thread will fix it.");
                             create_thread_count = assign_queue.len() - idle_thread_vec.len();
                         } else if THREAD_MAX_NUM > thread_vec.len() {
                             log::info!("Creating new threads...");
@@ -243,7 +272,7 @@ impl Kernel {
                                         if let Ok(message) = message_wrapped {
                                             match message {
                                                 Message::Package(package) => {
-                                                    log::trace!("Execute package");
+                                                    log::trace!("Thread is executing package");
                                                     //Variable collection
                                                     let mut variable_vector = Vec::new();
                                                     let variable_hashmap =
@@ -257,7 +286,7 @@ impl Kernel {
                                                         if variable_name.starts_with('"')
                                                             && variable_name.ends_with('"')
                                                         {
-                                                            log::warn!(
+                                                            log::info!(
                                                                 "Variable {} seems to be a string.",
                                                                 variable_name
                                                             );
@@ -402,15 +431,14 @@ impl Kernel {
                                                         },
                                                         structures::ExpressionTo::Nil => {},
                                                     }
-                                                    log::trace!("Sented result.");
                                                     tx.send(thread_result).unwrap();
                                                 }
                                                 Message::Exit => {
-                                                    log::warn!("Thread stopping");
+                                                    log::info!("Thread stopping");
                                                     return;
                                                 }
                                                 _ => {
-                                                    log::warn!("Unexpected message");
+                                                    log::error!("Unexpected message");
                                                 }
                                             }
                                         } else if let Err(mpsc::TryRecvError::Disconnected) =
@@ -448,12 +476,29 @@ impl Kernel {
                     for thread in idle_thread_vec {
                         if !assign_queue.is_empty() {
                             let package = assign_queue.remove(0);
-                            log::trace!("Assigned thread identifier: {:?}, job identifier: {:?}", thread.identifier, package.identifier);
+                            log::trace!("Assigned thread identifier: {}, job identifier: {}", thread, package);
                             assigned_job_identifier_hashmap.insert(thread.identifier, package.identifier);
                             thread
                                 .sender
                                 .send(Message::Package(package))
                                 .unwrap();
+                        }
+                    }
+                    if now_stop {
+                        let mut can_stop = true;
+                        for thread in &thread_vec {
+                            if let ThreadState::Busy = thread.state {
+                                can_stop = false;
+                            }
+                        }
+                        if can_stop {
+                            log::trace!("Kernel stopping gracefully...");
+                            for thread in thread_vec {
+                                thread.sender.send(Message::Exit).unwrap();
+                                thread.handle.join().unwrap();
+                            }
+                            log::info!("Kernel stopped.");
+                            return;
                         }
                     }
                 }
@@ -478,7 +523,11 @@ impl Kernel {
         }
     }
     pub fn stop(self) {
-        self.sender.send(Message::Exit);
+        self.sender.send(Message::Exit).unwrap();
+        self.handle.join().unwrap();
+    }
+    pub fn grace_stop(self) {
+        self.sender.send(Message::ExitGracefully).unwrap();
         self.handle.join().unwrap();
     }
 }
