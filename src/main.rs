@@ -52,7 +52,16 @@ fn main() {
     if !loaded_script_file.is_empty() {
         for i in loaded_script_file {
             let mut script = std::fs::read_to_string(i).unwrap();
-            script.retain(|c| !c.is_whitespace());
+            let mut branches_count = 0;
+            script.retain(|c| {
+                (
+                    (!c.is_whitespace()) || (branches_count % 2 == 1),
+                    if c == '"' {
+                        branches_count += 1
+                    },
+                )
+                    .0
+            });
             let script_structure = structures::new_script(&script);
             threads.send_message(kernel::Message::NewScript(i.to_string(), script_structure));
         }
@@ -65,7 +74,16 @@ fn main() {
         None => Vec::new(),
     };
     let mut main_script = std::fs::read_to_string(script_file).unwrap();
-    main_script.retain(|c| !c.is_whitespace());
+    let mut branches_count = 0;
+    main_script.retain(|c| {
+        (
+            (!c.is_whitespace()) || (branches_count % 2 == 1),
+            if c == '"' {
+                branches_count += 1
+            },
+        )
+            .0
+    });
     let main_script_structure = structures::new_script(&main_script);
     let mut variables_primitive = Vec::new();
     for i in vars {
